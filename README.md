@@ -1,3 +1,4 @@
+![image](https://github.com/RyanSKJ/word2vec-guided-lda/blob/master/word2vec_lda_model.png)
 |word2vec-lda算法的文本生成过程 |
 |:----|
 |输入：文档集合  <br> 输出：文档-主题分布 ![](http://latex.codecogs.com/svg.latex?\theta) 和主题-词分布 ![](http://latex.codecogs.com/svg.latex?\phi)|

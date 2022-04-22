@@ -10,6 +10,7 @@ from scipy.spatial.distance import cosine
 import random
 import math
 import heapq
+import tqdm
 
 import lda._lda
 import lda.utils
@@ -235,6 +236,30 @@ class LDA:
         assert len(theta_doc) == self.n_topics
         assert theta_doc.shape == (self.n_topics,)
         return theta_doc
+    
+    def perplexity(self, X):
+        """Calculate the perplexity score of the topic model
+
+        Parameters
+        ----------
+        X: array-like, shape (n_samples, n_features)
+            Training vector, where n_samples in the number of samples and
+            n_features is the number of features. Sparse matrix allowed.
+        """
+        N = int(X.sum())
+        sum = 0
+        for d in range(X.shape[0]):
+            prob_doc = 0.0 # the probablity of the doc
+            for i in range(X.shape[1]):
+                if X[d,i] != 0:
+                    prob_word = 0 # the probablity of the word
+                    for k in range(self.n_topics):
+                        # cal p(w) = sumz(p(z|d)*p(w|z))
+                        prob_word += self.doc_topic_[d,k] * self.topic_word_[k,i]
+                    prob_doc += X[d,i] * math.log(prob_word)
+            sum += prob_doc
+        perplexity_score = math.exp(-sum/N)
+        return perplexity_score
 
     def _fit(self, X):
         """Fit the model to the data X
@@ -248,18 +273,18 @@ class LDA:
         random_state = lda.utils.check_random_state(self.random_state)
         rands = self._rands.copy()
         self._initialize(X)
-        for it in range(self.n_iter):
+        for it in tqdm.tqdm(range(self.n_iter)):
             # FIXME: using numpy.roll with a random shift might be faster
             random_state.shuffle(rands)
             if it % self.refresh == 0:
                 ll = self.loglikelihood()
-                logger.info("<{}> log likelihood: {:.0f}".format(it, ll))
+                #logger.info("<{}> log likelihood: {:.0f}".format(it, ll))
                 # keep track of loglikelihoods for monitoring convergence
                 self.loglikelihoods_.append(ll)
             self._sample_topics(rands)
 
             #woc2vec引导
-            if it%20 == 0:
+            if it%2 == 0:
                 self.components_ = (self.nzw_ + self.eta).astype(float)
                 self.components_ /= np.sum(self.components_, axis=1)[:, np.newaxis]
                 topic_word_ = self.components_ # topic * word
@@ -286,8 +311,7 @@ class LDA:
                                     con_frequency += 1
                                 if count[l, d, i] != 0:
                                     self_frequency += 1
-                            if con_frequency != 0:
-                                ck[i] += math.log(con_frequency / self_frequency)
+                            ck[i] += math.log((con_frequency + 1)/ self_frequency)
                 ck_sum = np.sum(ck)
                 adjust = 0
                 ck_min = ck[0] - (ck_sum - ck[0]) / (self.n_topics - 1)
@@ -295,6 +319,8 @@ class LDA:
                     if ck[i] - (ck_sum - ck[i]) / (self.n_topics - 1) < ck_min:
                         ck_min = ck[i] - (ck_sum - ck[i]) / (self.n_topics - 1)
                         adjust = i
+                #if it == self.n_iter - 1:
+                    #print(ck_sum/self.n_topics)
 
                 #通过Doc2vec更新eta权重
                 min_rele = []
@@ -337,6 +363,7 @@ class LDA:
         self.doc_topic_ = (self.ndz_ + self.alpha).astype(float)
         self.doc_topic_ /= np.sum(self.doc_topic_, axis=1)[:, np.newaxis]
         self.topic_word_ = self.lamda * self.topic_word_ + (1 - self.lamda) * self.topic_word_new
+        print(self.perplexity(X))
 
         # delete attributes no longer needed after fitting to save memory and reduce clutter
         del self.WS
